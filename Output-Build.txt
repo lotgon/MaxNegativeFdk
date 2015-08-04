@@ -1,0 +1,4 @@
+﻿Error occurred while restoring NuGet packages: Unable to locate the solution directory. Please ensure that the solution has been saved.
+1>------ Build started: Project: CudafyMaxNegative, Configuration: Debug Any CPU ------
+1>  CudafyMaxNegative -> E:\projects\HPP\MaxNegativeFdk\CudafyMaxNegative\bin\Debug\CudafyMaxNegative.exe
+========== Build: 1 succeeded, 0 failed, 0 up-to-date, 0 skipped ==========
