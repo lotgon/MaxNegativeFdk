@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using CsvHelper;
 using System.IO;
 
 using Cudafy;
 using Cudafy.Host;
 using Cudafy.Translator;
 using System.Diagnostics;
-
+using SoftFX.Extended;
+using System.Reflection;
 
 namespace CudafyMaxNegative
 {
@@ -20,22 +20,20 @@ namespace CudafyMaxNegative
         {
             List<float> pricesList = new List<float>();
             List<string> datesList = new List<string>();
+            
+            Console.WriteLine(Environment.CurrentDirectory);
+            Console.WriteLine(Environment.Is64BitProcess);
 
-            using( var streamReader = new System.IO.StreamReader(Settings1.Default.InputCsvFileName) )
-            {
-                CsvReader csv = new CsvReader(streamReader);
-                csv.Configuration.HasHeaderRecord = true;
-                while (csv.Read())
-                {
-                    string header = csv.GetField<string>(0);
-                    float price = csv.GetField<float>(1);
-                    string dataTime = csv.GetField<string>(2);
+            InitGPU();
 
-                    pricesList.Add(price);
-                    datesList.Add(dataTime);
-                }
-            }
+            Console.WriteLine(Environment.CurrentDirectory);
 
+            Bar[] bars = getbars();
+
+            pricesList.AddRange(bars.Select(p => (float)p.Open));
+            datesList.AddRange(bars.Select(p => p.From.ToString()));
+
+            Console.WriteLine(Environment.CurrentDirectory);
             using( StreamWriter sw = new StreamWriter(Settings1.Default.InputCsvFileName+"_Cudafy.csv"))
             {
                 sw.WriteLine("Date, Tp, Drawdown,BarDuration");
@@ -47,9 +45,34 @@ namespace CudafyMaxNegative
 
         }
 
+        private static Bar[] getbars()
+        {
+            FdkBase fdk = new FdkBase();
+            fdk.Login("ttlive.fxopen.com", "800042-readonly", "wcE8dCdxaSFR");
+            DateTime now = DateTime.UtcNow;
+            DateTime prev = now.AddHours(-4);
+            Bar[] bars = fdk.Storage.Online.GetBars("EURUSD", PriceType.Ask, BarPeriod.S1, prev, now);
+            return bars;
+        }
+
         static GPGPU InitGPU()
         {
-            CudafyModes.Target = eGPUType.OpenCL; // To use OpenCL, change this enum
+            try
+            {
+                CudafyModes.Target = eGPUType.OpenCL; // To use OpenCL, change this enum
+                CudafyTranslator.Language = CudafyModes.Target == eGPUType.OpenCL ? eLanguage.OpenCL : eLanguage.Cuda;
+
+            }
+            catch (Exception ex)
+            {
+                if (ex is System.Reflection.ReflectionTypeLoadException)
+                {
+                    var typeLoadException = ex as ReflectionTypeLoadException;
+                    var loaderExceptions = typeLoadException.LoaderExceptions;
+                    int k = 9;
+                }
+            }
+            CudafyModes.Target = eGPUType.Cuda; // To use OpenCL, change this enum
             CudafyTranslator.Language = CudafyModes.Target == eGPUType.OpenCL ? eLanguage.OpenCL : eLanguage.Cuda;
 
             int deviceCount = CudafyHost.GetDeviceCount(CudafyModes.Target);
