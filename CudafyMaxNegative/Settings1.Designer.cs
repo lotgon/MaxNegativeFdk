@@ -22,14 +22,5 @@ namespace CudafyMaxNegative {
                 return defaultInstance;
             }
         }
-        
-        [global::System.Configuration.ApplicationScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("e:\\projects\\HPP\\HPP\\MaxNegative\\Data\\silverDay2.csv ")]
-        public string InputCsvFileName {
-            get {
-                return ((string)(this["InputCsvFileName"]));
-            }
-        }
     }
 }

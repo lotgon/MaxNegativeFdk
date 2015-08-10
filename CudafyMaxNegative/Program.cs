@@ -11,6 +11,7 @@ using Cudafy.Translator;
 using System.Diagnostics;
 using SoftFX.Extended;
 using System.Reflection;
+using System.Globalization;
 
 namespace CudafyMaxNegative
 {
@@ -18,56 +19,49 @@ namespace CudafyMaxNegative
     {
         static void Main(string[] args)
         {
+            Library.Initialize();
+            InitGPU();
+
             List<float> pricesList = new List<float>();
             List<string> datesList = new List<string>();
             
-            Console.WriteLine(Environment.CurrentDirectory);
-            Console.WriteLine(Environment.Is64BitProcess);
-
-            InitGPU();
-
-            Console.WriteLine(Environment.CurrentDirectory);
-
-            Bar[] bars = getbars();
+            Bar[] bars = Quotes.Get("EURUSD", 
+                DateTime.Parse("07/01/2015", CultureInfo.InvariantCulture),
+                DateTime.Parse("07/30/2015", CultureInfo.InvariantCulture)
+            );
 
             pricesList.AddRange(bars.Select(p => (float)p.Open));
             datesList.AddRange(bars.Select(p => p.From.ToString()));
 
-            Console.WriteLine(Environment.CurrentDirectory);
-            using( StreamWriter sw = new StreamWriter(Settings1.Default.InputCsvFileName+"_Cudafy.csv"))
+            Console.WriteLine("Starting analyses of {0} items.", pricesList.Count);
+
+            using( StreamWriter sw = new StreamWriter("_Cudafy.csv"))
             {
                 sw.WriteLine("Date, Tp, Drawdown,BarDuration");
                 MeasureTime("GPGPU seq", 1, ()=>
                     {
-                        CalculateAll(null, pricesList.ToArray(), datesList.ToArray(), 0.5f, 2, 0.1f);
+                        CalculateAll(sw, pricesList.ToArray(), datesList.ToArray(), 0.003f, 0.005f, 0.001f);
                     });
             }
 
         }
 
-        private static Bar[] getbars()
-        {
-            FdkBase fdk = new FdkBase();
-            fdk.Login("ttlive.fxopen.com", "800042-readonly", "wcE8dCdxaSFR");
-            DateTime now = DateTime.UtcNow;
-            DateTime prev = now.AddHours(-4);
-            Bar[] bars = fdk.Storage.Online.GetBars("EURUSD", PriceType.Ask, BarPeriod.S1, prev, now);
-            return bars;
-        }
+
 
         static GPGPU InitGPU()
         {
             try
             {
-                CudafyModes.Target = eGPUType.OpenCL; // To use OpenCL, change this enum
+                CudafyModes.Target = eGPUType.Cuda; // To use OpenCL, change this enum
                 CudafyTranslator.Language = CudafyModes.Target == eGPUType.OpenCL ? eLanguage.OpenCL : eLanguage.Cuda;
 
             }
             catch (Exception ex)
             {
-                if (ex is System.Reflection.ReflectionTypeLoadException)
+                var ex2 = ex.InnerException.InnerException;
+                if (ex2 is System.Reflection.ReflectionTypeLoadException)
                 {
-                    var typeLoadException = ex as ReflectionTypeLoadException;
+                    var typeLoadException = ex2 as ReflectionTypeLoadException;
                     var loaderExceptions = typeLoadException.LoaderExceptions;
                     int k = 9;
                 }
@@ -108,8 +102,10 @@ namespace CudafyMaxNegative
 
             for (float currTp = startTp; currTp <= endTp; currTp += stepTp)
             {
-                int BLOCK_SIZE = 32;
-                gpu.Launch((N - 1) / BLOCK_SIZE + 1, BLOCK_SIZE).calculate(dev_prices, currTp, N, dev_drawdown, dev_duration);
+                int BLOCK_SIZE = 64;
+                gpu.LaunchAsync((N - 1) / BLOCK_SIZE + 1, BLOCK_SIZE, 1, "calculate", dev_prices, currTp, N, dev_drawdown, dev_duration);
+
+                gpu.Synchronize();
 
                 gpu.CopyFromDevice<float>(dev_drawdown, drawdown);
                 gpu.CopyFromDevice<int>(dev_duration, duration);
@@ -132,22 +128,25 @@ namespace CudafyMaxNegative
             if (absTx >= N)
                 return;
 
-            //Console.WriteLine("blockIdx.x = " + gt.blockIdx.x.ToString());//  blockDim.x={1} threadIdx.x={2}", gt.blockDim.x, gt.threadIdx.x));
             float threshold = prices[absTx] + currTp;
             float openPrice = prices[absTx];
             float drawdown = 0;
             int step;
-            for (step = absTx; step < N && prices[step] < threshold ; step++)
+            for (step = absTx; step < N-1  ; step++)
             {
-                if (openPrice - prices[step] > drawdown)
-                    drawdown = openPrice - prices[step];
+                float currPrice = prices[step];
+                if (currPrice >= threshold)
+                    break;
+                if (openPrice - currPrice > drawdown)
+                    drawdown = openPrice - currPrice;
             }
+            //Console.WriteLine("absTx = %d step=%d drawdown=%f", absTx, step, drawdown);//  blockDim.x={1} threadIdx.x={2}", gt.blockDim.x, gt.threadIdx.x));
+
             if (step < N)
                 durationArray[absTx] = step - absTx;
             else
                 durationArray[absTx] = -1;
             drawdownArray[absTx] = drawdown;
-
         }
 
         internal static void MeasureSpeed(string name, int times, Action testAction, Func<double, string> addInfo = null)

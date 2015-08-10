@@ -18,6 +18,7 @@ namespace CudafyMaxNegative
         }
         public void Login(string address, string username, string password)
         {
+               
             #region EnsureDirectoryCreating
             string CommonPath = Assembly.GetEntryAssembly() != null ? Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) : string.Empty;
             string logPath = Path.Combine(CommonPath, "Logs");
