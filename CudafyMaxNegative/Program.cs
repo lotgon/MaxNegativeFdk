@@ -24,24 +24,37 @@ namespace CudafyMaxNegative
 
             List<float> pricesList = new List<float>();
             List<string> datesList = new List<string>();
-            
-            Bar[] bars = Quotes.Get("EURUSD", 
-                DateTime.Parse("07/01/2015", CultureInfo.InvariantCulture),
-                DateTime.Parse("07/30/2015", CultureInfo.InvariantCulture)
-            );
+            DateTime from = DateTime.Parse("01/01/2014", CultureInfo.InvariantCulture);
+            string[] symbols = new string[]{"NZDCAD"};
+            int numberMonth = 18;
 
-            pricesList.AddRange(bars.Select(p => (float)p.Open));
-            datesList.AddRange(bars.Select(p => p.From.ToString()));
-
-            Console.WriteLine("Starting analyses of {0} items.", pricesList.Count);
-
-            using( StreamWriter sw = new StreamWriter("_Cudafy.csv"))
+            foreach (string symbol in symbols)
             {
-                sw.WriteLine("Date, Tp, Drawdown,BarDuration");
-                MeasureTime("GPGPU seq", 1, ()=>
+
+                List<Bar> filteredBar = new List<Bar>();
+                double initialPrice = -1;
+                foreach (Bar currBar in Quotes.Get(symbol, from, from.AddMonths(numberMonth)))
+                {
+                    if (Math.Abs(currBar.Open - initialPrice) >= 0.0003)
                     {
-                        CalculateAll(sw, pricesList.ToArray(), datesList.ToArray(), 0.003f, 0.005f, 0.001f);
-                    });
+                        filteredBar.Add(currBar);
+                        initialPrice = currBar.Open;
+                    }
+                }
+
+                pricesList.AddRange(filteredBar.Select(p => (float)p.Open));
+                datesList.AddRange(filteredBar.Select(p => p.From.ToString()));
+
+                Console.WriteLine("Starting analyses of {0} items.", pricesList.Count);
+
+                using (StreamWriter sw = new StreamWriter(string.Format("{0}_{1}_{2}.csv", symbol, from.Month, "M1")))
+                {
+                    sw.WriteLine("Date,Tp,Drawdown,BarDuration");
+                    MeasureTime("GPGPU seq", 1, () =>
+                        {
+                            CalculateAll(sw, pricesList.ToArray(), datesList.ToArray(), 0.001f, 0.01f, 0.003f);
+                        });
+                }
             }
 
         }
@@ -114,7 +127,7 @@ namespace CudafyMaxNegative
                 {
                     for( int i=0;i<N;i++)
                     {
-                        sq.WriteLine(string.Format("{0}, {1}, {2}, {3}", dates[i], currTp, Math.Round(drawdown[i], 6), duration[i]));
+                        sq.WriteLine(string.Format("{0},{1},{2},{3}", dates[i], currTp, Math.Round(drawdown[i], 6), duration[i]));
                     }
                 }
             }
@@ -132,7 +145,7 @@ namespace CudafyMaxNegative
             float openPrice = prices[absTx];
             float drawdown = 0;
             int step;
-            for (step = absTx; step < N-1  ; step++)
+            for (step = absTx; step < N  ; step++)
             {
                 float currPrice = prices[step];
                 if (currPrice >= threshold)

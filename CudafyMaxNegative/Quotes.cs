@@ -15,7 +15,7 @@ namespace CudafyMaxNegative
             {
 
                 fdk.Login("ttlive.fxopen.com", "800042-readonly", "wcE8dCdxaSFR");
-                return fdk.Storage.Online.GetBars(symbol, PriceType.Ask, BarPeriod.S1, from, to);
+                return fdk.Storage.Online.GetBars(symbol, PriceType.Ask, BarPeriod.M1, from, to);
             }
         }
     }

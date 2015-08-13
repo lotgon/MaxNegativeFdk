@@ -3,3 +3,5 @@ obj
 packages/**
 tools
 /CudafyMaxNegative.v12.suo
+/CudafyMaxNegative/Release/*.cu
+/CudafyMaxNegative/Release
